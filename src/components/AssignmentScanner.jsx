@@ -4,14 +4,11 @@ import { callAI } from '../utils/aiService';
 import { useAuth } from '../hooks/useAuth';
 import { Copy, Check, BookOpen, ScanText, UploadCloud, FileText } from 'lucide-react';
 import LoadingSpinner from './LoadingSpinner';
-import * as pdfjsLib from 'pdfjs-dist/build/pdf';
+import * as pdfjsLib from 'pdfjs-dist';
 import * as mammoth from 'mammoth/mammoth.browser';
 
-// Set up PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.mjs',
-    import.meta.url
-).toString();
+// Set up PDF.js worker via CDN to avoid Vite/Vercel build issues
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 const SUBJECTS = ['Mathematics', 'Computer Science', 'Business', 'Engineering', 'Science', 'Humanities', 'Law', 'Medicine', 'Other'];
 const URGENCIES = [
