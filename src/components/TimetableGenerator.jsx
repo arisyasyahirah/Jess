@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Upload, Calendar as CalendarIcon, FileText, Check, AlertCircle, Edit2, Trash2, Plus, GripHorizontal, ArrowRight, LayoutGrid, List, Download } from 'lucide-react';
+import { Upload, Calendar as CalendarIcon, FileText, Check, AlertCircle, Edit2, Trash2, Plus, GripHorizontal, ArrowRight, LayoutGrid, List, Download, User, Clock } from 'lucide-react';
 import LoadingSpinner from './LoadingSpinner';
 import * as pdfjsLib from 'pdfjs-dist';
 import { callAI } from '../utils/aiService';
@@ -9,15 +9,19 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLi
 // Example of parsed shape:
 // { id, courseCode, courseName, timeStart: '10:00', timeEnd: '12:00', day: 'Monday', location: 'Room A', type: 'Lecture' }
 
-export default function TimetableGenerator() {
+export function TimetableGenerator() {
     const fileInputRef = useRef(null);
-    const [step, setStep] = useState(1); // 1 = Upload, 2 = Verify, 3 = render Dual View
+    const [step, setStep] = useState(3); // 1 = Upload, 2 = Verify, 3 = render Dual View
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
     // State
     const [rawInput, setRawInput] = useState('');
-    const [parsedClasses, setParsedClasses] = useState([]);
+    const [parsedClasses, setParsedClasses] = useState([
+        { id: 'sample1', courseCode: 'CSF3013', courseName: 'STRUKTUR DATA DAN A', timeStart: '08:00', timeEnd: '11:00', day: 'Monday', location: 'MP2', type: 'Lecture', instructor: 'TBD' },
+        { id: 'sample2', courseCode: 'CSF3123', courseName: 'PANGKALAN DATA', timeStart: '11:00', timeEnd: '13:00', day: 'Monday', location: 'BK5-02', type: 'Lecture', instructor: 'TBD' },
+        { id: 'sample3', courseCode: 'CSF3133', courseName: 'REKA BENTUK ANTARA', timeStart: '08:00', timeEnd: '12:00', day: 'Monday', location: 'DS2/MP1', type: 'Lecture', instructor: 'TBD' }
+    ]);
     const [selectedClass, setSelectedClass] = useState(null);
 
     // View Options
@@ -30,8 +34,15 @@ export default function TimetableGenerator() {
         ? ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
         : ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
-    // Auto-generate consistent colors for distinct courses
+    // Specific Color Palette
+    const COURSE_COLORS = {
+        'CSF3013': '#e6f3ff', // Light blue
+        'CSF3123': '#e8f5e9', // Soft green
+        'CSF3133': '#f0e6ff'  // Gentle lavender
+    };
+
     const getCourseColor = (courseCode) => {
+        if (COURSE_COLORS[courseCode]) return COURSE_COLORS[courseCode];
         const colors = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981', '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef', '#f43f5e'];
         let hash = 0;
         for (let i = 0; i < courseCode.length; i++) {
@@ -62,8 +73,6 @@ export default function TimetableGenerator() {
                 }
                 extractedText = fullText;
             } else if (file.type.startsWith('image/')) {
-                // OCR placeholder - basic text parsing alert since real robust OCR requires Tesseract.js (heavy). 
-                // Recommend raw text input for images fallback.
                 throw new Error("Image scanning requires OCR. Please supply the raw text schedule or upload a PDF for now.");
             } else {
                 const text = await file.text();
@@ -104,7 +113,7 @@ export default function TimetableGenerator() {
             Map each to exactly this JSON Array format (DO NOT WRAP IN BACKTICKS OR MARKDOWN, purely return RAW JSON array):
             [
               {
-                "id": "random_uuid() string",
+                "id": "${Math.random().toString(36).substr(2, 9)}",
                 "courseCode": "e.g. CS101",
                 "courseName": "e.g. Intro to Computer Science",
                 "timeStart": "e.g. 10:00 (24h format HH:mm)",
@@ -130,16 +139,22 @@ export default function TimetableGenerator() {
 
         try {
             const data = JSON.parse(cleaned);
-            // Assign real random IDs
-            const mapped = data.map(d => ({ ...d, id: Math.random().toString(36).substr(2, 9) }));
+            const mapped = data.map(d => {
+                // Normalize Day
+                let normalizedDay = d.day || 'Monday';
+                const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                const matched = days.find(day => normalizedDay.toLowerCase().includes(day.toLowerCase().substring(0, 3)));
+                if (matched) normalizedDay = matched;
+
+                return { ...d, day: normalizedDay, id: Math.random().toString(36).substr(2, 9) };
+            });
             setParsedClasses(mapped);
-            setStep(2); // Move to Verification Table
+            setStep(3); // Go straight to grid so user sees results
         } catch (e) {
             throw new Error("AI failed to extract schedule accurately. Please try editing the text manually.");
         }
     };
 
-    // Verification Table actions
     const handleUpdateClass = (id, field, value) => {
         setParsedClasses(parsedClasses.map(c => c.id === id ? { ...c, [field]: value } : c));
     };
@@ -157,7 +172,6 @@ export default function TimetableGenerator() {
     };
 
     const startDualViewMode = () => {
-        // Validation check
         if (parsedClasses.length === 0) {
             setError("No classes found. Please add a class to proceed.");
             return;
@@ -186,18 +200,14 @@ export default function TimetableGenerator() {
 
     const handleSyncToPlanner = () => {
         const events = JSON.parse(localStorage.getItem('jess_events') || '[]');
-
-        // We will generate fake recurring dates starting from this week for the next 15 weeks (typical semester)
         const dayMap = { 'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4, 'Friday': 5, 'Saturday': 6 };
 
         parsedClasses.forEach(cls => {
             const dayOfWk = dayMap[cls.day] ?? 1;
-
-            // Start from today, find the next matching day
             let d = new Date();
             d.setDate(d.getDate() + (dayOfWk + 7 - d.getDay()) % 7);
 
-            for (let i = 0; i < 15; i++) { // 15 week semester
+            for (let i = 0; i < 15; i++) {
                 const evDate = new Date(d);
                 evDate.setDate(evDate.getDate() + (i * 7));
 
@@ -219,10 +229,21 @@ export default function TimetableGenerator() {
         alert("Successfully synced all Timetable classes to your Future Planner for the next 15 weeks!");
     };
 
-    // Convert '10:30' to numeric hours e.g. 10.5
     const parseTime = (timeStr) => {
         if (!timeStr) return 0;
-        const [h, m] = timeStr.split(':').map(Number);
+        // Handle "11:00 am" or "2pm" or "14:00"
+        const clean = timeStr.toLowerCase().trim();
+        const isPM = clean.includes('pm') && !clean.includes('12');
+        const is12PM = clean.includes('12pm');
+        const is12AM = clean.includes('12am');
+
+        let [timePart] = clean.split(/[ap]m/);
+        let [h, m] = timePart.includes(':') ? timePart.split(':').map(Number) : [Number(timePart), 0];
+
+        if (isPM) h += 12;
+        if (is12AM) h = 0;
+        if (is12PM) h = 12;
+
         return h + (m / 60);
     };
 
@@ -282,14 +303,17 @@ export default function TimetableGenerator() {
 
             {step === 2 && (
                 <div className="card fade-in" style={{ padding: 24 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
                         <div>
                             <h2 style={{ margin: '0 0 8px' }}>Verify Extracted Data</h2>
                             <p style={{ color: 'var(--text-muted)', margin: 0 }}>Review and edit AI-extracted classes before generating your timetable.</p>
                         </div>
-                        <button className="btn btn-primary" onClick={startDualViewMode}>
-                            <Check size={18} /> Confirm & Generate Schedule
-                        </button>
+                        <div style={{ display: 'flex', gap: 12 }}>
+                            <button className="btn btn-secondary" onClick={() => setStep(1)}>Back to Upload</button>
+                            <button className="btn btn-primary" onClick={startDualViewMode}>
+                                <Check size={18} /> Confirm & Generate Schedule
+                            </button>
+                        </div>
                     </div>
 
                     <div style={{ marginBottom: 16 }}>
@@ -318,8 +342,13 @@ export default function TimetableGenerator() {
                                         <td style={{ padding: 8 }}><input type="text" className="form-input" style={{ padding: 6, width: '100%', minWidth: 60 }} value={cls.courseCode} onChange={e => handleUpdateClass(cls.id, 'courseCode', e.target.value)} /></td>
                                         <td style={{ padding: 8 }}><input type="text" className="form-input" style={{ padding: 6, width: '100%', minWidth: 120 }} value={cls.courseName} onChange={e => handleUpdateClass(cls.id, 'courseName', e.target.value)} /></td>
                                         <td style={{ padding: 8 }}>
-                                            <select className="form-select" style={{ padding: 6 }} value={cls.day} onChange={e => handleUpdateClass(cls.id, 'day', e.target.value)}>
-                                                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => <option key={d}>{d}</option>)}
+                                            <select
+                                                className="form-select"
+                                                style={{ padding: 6 }}
+                                                value={['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].find(d => (cls.day || '').toLowerCase().includes(d.toLowerCase().substring(0, 3))) || 'Monday'}
+                                                onChange={e => handleUpdateClass(cls.id, 'day', e.target.value)}
+                                            >
+                                                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => <option key={d} value={d}>{d}</option>)}
                                             </select>
                                         </td>
                                         <td style={{ padding: 8 }}><input type="time" className="form-input" style={{ padding: 6 }} value={cls.timeStart} onChange={e => handleUpdateClass(cls.id, 'timeStart', e.target.value)} /></td>
@@ -346,39 +375,23 @@ export default function TimetableGenerator() {
 
             {step === 3 && (
                 <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    {/* Toolbar */}
                     <div className="card" style={{ padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
                         <div style={{ display: 'flex', gap: 8, background: 'var(--bg-secondary)', padding: 4, borderRadius: 8 }}>
-                            <button
-                                className={`btn btn-sm ${viewMode === 'horizontal' ? 'btn-primary' : 'btn-ghost'}`}
-                                onClick={() => setViewMode('horizontal')}
-                            >
+                            <button className={`btn btn-sm ${viewMode === 'horizontal' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setViewMode('horizontal')}>
                                 <LayoutGrid size={16} /> Horizontal View
                             </button>
-                            <button
-                                className={`btn btn-sm ${viewMode === 'vertical' ? 'btn-primary' : 'btn-ghost'}`}
-                                onClick={() => setViewMode('vertical')}
-                            >
+                            <button className={`btn btn-sm ${viewMode === 'vertical' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setViewMode('vertical')}>
                                 <List size={16} /> Vertical View
                             </button>
                         </div>
                         <div style={{ display: 'flex', gap: 12 }}>
-                            <select
-                                className="form-select btn-sm"
-                                value={`${timeRange[0]}-${timeRange[1]}`}
-                                onChange={(e) => {
-                                    const [s, f] = e.target.value.split('-').map(Number);
-                                    setTimeRange([s, f]);
-                                }}
-                                style={{ width: 'auto' }}
-                            >
+                            <select className="form-select btn-sm" value={`${timeRange[0]}-${timeRange[1]}`} onChange={(e) => { const [s, f] = e.target.value.split('-').map(Number); setTimeRange([s, f]); }} style={{ width: 'auto' }}>
                                 <option value="8-20">8 AM - 8 PM</option>
                                 <option value="7-22">7 AM - 10 PM</option>
                                 <option value="9-17">9 AM - 5 PM</option>
                             </select>
                             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', cursor: 'pointer' }}>
-                                <input type="checkbox" checked={showWeekends} onChange={e => setShowWeekends(e.target.checked)} />
-                                Weekends
+                                <input type="checkbox" checked={showWeekends} onChange={e => setShowWeekends(e.target.checked)} /> Weekends
                             </label>
                             <button className="btn btn-secondary btn-sm" onClick={() => setStep(2)}>
                                 <Edit2 size={16} /> Edit
@@ -392,47 +405,58 @@ export default function TimetableGenerator() {
                         </div>
                     </div>
 
-                    {/* Horizontal Timetable Views */}
                     {viewMode === 'horizontal' && (
-                        <div className="card" style={{ padding: 24, overflowX: 'auto', background: 'var(--bg-elevated)' }}>
-                            <div style={{ minWidth: 800 }}>
-                                {/* Header Row */}
-                                <div style={{ display: 'flex', borderBottom: '2px solid var(--border)' }}>
-                                    <div style={{ width: 80, flexShrink: 0 }} /> {/* empty corner */}
+                        <div className="card" style={{ padding: 24, overflow: 'auto', background: 'var(--bg-elevated)', maxHeight: '70vh' }}>
+                            <div style={{ minWidth: 1000, position: 'relative' }}>
+                                <div style={{ display: 'flex', borderBottom: '2px solid var(--border)', background: 'var(--bg-secondary)', position: 'sticky', top: 0, zIndex: 100 }}>
+                                    <div style={{ width: 100, flexShrink: 0, borderRight: '1px solid var(--border)', background: 'var(--bg-secondary)', position: 'sticky', left: 0, zIndex: 110 }} />
                                     {DAYS.map(d => (
-                                        <div key={d} style={{ flex: 1, textAlign: 'center', fontWeight: 600, padding: 12, borderLeft: '1px solid var(--border)' }}>
+                                        <div key={d} style={{ flex: 1, textAlign: 'center', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', padding: 16, borderLeft: '1px solid var(--border)', color: 'var(--text-primary)' }}>
                                             {d}
                                         </div>
                                     ))}
                                 </div>
-                                {/* Grid Rows per hour */}
                                 {HOURS.map(hour => (
-                                    <div key={hour} style={{ display: 'flex', position: 'relative', height: 60, borderBottom: '1px solid var(--border)' }}>
-                                        <div style={{ width: 80, flexShrink: 0, padding: 8, fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'right', borderRight: '1px solid var(--border)' }}>
-                                            {`${hour}:00`}
+                                    <div key={hour} style={{ display: 'flex', position: 'relative', height: 120, borderBottom: '1px solid var(--border-light)' }}>
+                                        <div style={{ width: 100, flexShrink: 0, padding: 12, fontSize: '0.85rem', color: '#95b5b6', fontWeight: 600, fontFamily: 'monospace', textAlign: 'right', borderRight: '1px solid var(--border)', background: 'var(--bg-secondary)', position: 'sticky', left: 0, zIndex: 90, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                                                <Clock size={12} /> {`${hour}:00`}
+                                            </div>
+                                            <div style={{ fontSize: '0.7rem', opacity: 0.3, borderTop: '1px dotted var(--border)', paddingTop: 2 }}>{`${hour}:30`}</div>
                                         </div>
                                         {DAYS.map(day => (
-                                            <div key={`${day}-${hour}`} style={{ flex: 1, position: 'relative', borderRight: '1px solid var(--border)' }}>
-                                                {parsedClasses.filter(c => c.day === day && parseTime(c.timeStart) >= hour && parseTime(c.timeStart) < (hour + 1)).map(cls => {
+                                            <div key={`${day}-${hour}`} className="calendar-day-cell" onClick={() => { const id = Math.random().toString(36).substr(2, 9); setParsedClasses([...parsedClasses, { id, courseCode: '', courseName: 'New Class', timeStart: `${hour < 10 ? '0' + hour : hour}:00`, timeEnd: `${hour + 1 < 10 ? '0' + (hour + 1) : hour + 1}:00`, day, location: '', type: 'Lecture', instructor: '' }]); setStep(2); }} style={{ flex: 1, position: 'relative', borderRight: '1px solid var(--border-light)', cursor: 'cell' }}>
+                                                {parsedClasses.filter(c => {
+                                                    const cDay = (c.day || '').trim().toLowerCase();
+                                                    const dDay = day.trim().toLowerCase();
+                                                    // Normalize "Mon" to "monday", etc. if needed, but here we just check if it contains the day name
+                                                    if (!cDay.startsWith(dDay.substring(0, 3))) return false;
+
+                                                    const start = parseTime(c.timeStart);
+                                                    const end = parseTime(c.timeEnd);
+                                                    return start >= hour && start < (hour + 1);
+                                                }).map(cls => {
                                                     const startVal = parseTime(cls.timeStart);
                                                     const endVal = parseTime(cls.timeEnd);
-                                                    const duration = endVal > startVal ? endVal - startVal : 1;
+                                                    const durationHrs = endVal > startVal ? endVal - startVal : 1;
                                                     const offset = startVal - hour;
-
                                                     const bg = getCourseColor(cls.courseCode);
+                                                    const isSpecial = !!COURSE_COLORS[cls.courseCode];
                                                     return (
-                                                        <div
-                                                            key={cls.id}
-                                                            onClick={() => setSelectedClass(cls)}
-                                                            style={{
-                                                                position: 'absolute', top: `${offset * 100}%`, left: 2, right: 2, height: `${duration * 100}%`,
-                                                                background: `${bg}20`, borderLeft: `3px solid ${bg}`, padding: 6, borderRadius: 4,
-                                                                zIndex: 10, overflow: 'hidden', boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                                                                cursor: 'pointer'
-                                                            }}>
-                                                            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-primary)' }}>{cls.courseCode}</div>
-                                                            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{cls.timeStart} - {cls.timeEnd}</div>
-                                                            <div style={{ fontSize: '0.65rem' }}>{cls.location}</div>
+                                                        <div key={cls.id} onClick={(e) => { e.stopPropagation(); setSelectedClass(cls); }} style={{ position: 'absolute', top: `${offset * 100}%`, left: 4, right: 4, height: `${durationHrs * 100 - 4}%`, background: isSpecial ? bg : `${bg}15`, borderLeft: `4px solid ${isSpecial ? '#2c3e50' : bg}`, padding: '12px 14px', borderRadius: 8, zIndex: 10, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', cursor: 'pointer', display: 'flex', flexDirection: 'column', border: '1px solid rgba(0,0,0,0.05)', transition: 'transform 0.2s', transform: 'translateZ(0)' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px) scale(1.01)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0) scale(1)'}>
+                                                            <div style={{ fontSize: '1rem', fontWeight: 800, color: '#2c3e50', marginBottom: 2 }}>{cls.courseCode}</div>
+                                                            <div style={{ fontSize: '0.85rem', fontWeight: 500, color: '#34495e', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', marginBottom: 8 }}>{cls.courseName}</div>
+                                                            <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                                                <div style={{ fontSize: '0.75rem', color: '#7f8c8d', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 500 }}>
+                                                                    <Clock size={12} /> {cls.timeStart} – {cls.timeEnd}
+                                                                    <span style={{ fontSize: '0.65rem', background: 'rgba(0,0,0,0.05)', padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>{durationHrs}h</span>
+                                                                </div>
+                                                                <div style={{ fontSize: '0.75rem', color: '#7f8c8d', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                                    <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>📍 {cls.location || 'TBD'}</span>
+                                                                    <span style={{ opacity: 0.3 }}>|</span>
+                                                                    <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>📊 {cls.type}</span>
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     )
                                                 })}
@@ -444,39 +468,32 @@ export default function TimetableGenerator() {
                         </div>
                     )}
 
-                    {/* Vertical Timetable View */}
                     {viewMode === 'vertical' && (
                         <div className="card" style={{ padding: 24, background: 'var(--bg-elevated)' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                                 {DAYS.map(day => {
                                     const dayClasses = parsedClasses.filter(c => c.day === day).sort((a, b) => parseTime(a.timeStart) - parseTime(b.timeStart));
                                     if (dayClasses.length === 0) return null;
-
                                     return (
                                         <div key={day} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                                             <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--accent)', borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>{day}</h3>
                                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
                                                 {dayClasses.map(cls => {
                                                     const bg = getCourseColor(cls.courseCode);
+                                                    const isSpecial = !!COURSE_COLORS[cls.courseCode];
                                                     return (
-                                                        <div
-                                                            key={cls.id}
-                                                            onClick={() => setSelectedClass(cls)}
-                                                            style={{
-                                                                display: 'flex', gap: 12, padding: 16, background: 'var(--bg-secondary)', borderRadius: 12, border: '1px solid var(--border)', borderTop: `3px solid ${bg}`,
-                                                                cursor: 'pointer'
-                                                            }}>
-                                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', paddingRight: 12, borderRight: '1px dashed var(--border)', minWidth: 60 }}>
-                                                                <span style={{ fontSize: '1.2rem', fontWeight: 800 }}>{cls.timeStart.split(':')[0]}</span>
-                                                                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{cls.timeStart.split(':')[1]}</span>
+                                                        <div key={cls.id} onClick={() => setSelectedClass(cls)} style={{ display: 'flex', gap: 12, padding: 16, background: isSpecial ? bg : 'var(--bg-secondary)', borderRadius: 12, border: '1px solid var(--border)', borderTop: `4px solid ${isSpecial ? '#2c3e50' : bg}`, cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', paddingRight: 12, borderRight: '1px dashed rgba(0,0,0,0.1)', minWidth: 60 }}>
+                                                                <span style={{ fontSize: '1.2rem', fontVariantNumeric: 'tabular-nums', fontWeight: 800, color: '#2c3e50' }}>{cls.timeStart.split(':')[0]}</span>
+                                                                <span style={{ fontSize: '0.7rem', color: '#34495e', fontWeight: 600 }}>{cls.timeStart.split(':')[1]}</span>
                                                             </div>
                                                             <div>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                                                    <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>{cls.courseCode}</span>
-                                                                    <span style={{ fontSize: '0.65rem', background: 'var(--bg-elevated)', padding: '2px 6px', borderRadius: 10 }}>{cls.type}</span>
+                                                                    <span style={{ fontSize: '1rem', fontWeight: 800, color: '#2c3e50' }}>{cls.courseCode}</span>
+                                                                    <span style={{ fontSize: '0.65rem', background: 'rgba(0,0,0,0.05)', padding: '2px 6px', borderRadius: 4, fontWeight: 700, color: '#2c3e50' }}>{cls.type}</span>
                                                                 </div>
-                                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-primary)', marginBottom: 4 }}>{cls.courseName}</div>
-                                                                <div style={{ display: 'flex', gap: 12, fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                                                <div style={{ fontSize: '0.85rem', fontWeight: 500, color: '#34495e', marginBottom: 4 }}>{cls.courseName}</div>
+                                                                <div style={{ display: 'flex', gap: 12, fontSize: '0.75rem', color: '#7f8c8d' }}>
                                                                     <span>📍 {cls.location || 'TBD'}</span>
                                                                     {cls.instructor && <span>👨‍🏫 {cls.instructor}</span>}
                                                                 </div>
@@ -492,37 +509,52 @@ export default function TimetableGenerator() {
                         </div>
                     )}
 
-                    {/* Class Detail Modal Overlay */}
                     {selectedClass && (
                         <div className="modal-overlay" onClick={() => setSelectedClass(null)}>
-                            <div className="card fade-in" onClick={e => e.stopPropagation()} style={{ width: 400, padding: 24, background: 'var(--bg-elevated)', border: `1px solid ${getCourseColor(selectedClass.courseCode)}` }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+                            <div className="card fade-in" onClick={e => e.stopPropagation()} style={{ width: 450, padding: 32, background: 'var(--bg-elevated)', border: `2px solid ${getCourseColor(selectedClass.courseCode)}`, boxShadow: 'var(--shadow)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
                                     <div>
-                                        <div style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 600, marginBottom: 4 }}>{selectedClass.type}</div>
-                                        <h2 style={{ margin: 0 }}>{selectedClass.courseCode}</h2>
-                                        <div style={{ color: 'var(--text-muted)' }}>{selectedClass.courseName}</div>
+                                        <div style={{ fontSize: '0.9rem', color: 'var(--accent)', fontWeight: 700, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '1px' }}>{selectedClass.type}</div>
+                                        <h1 style={{ margin: '0 0 4px', fontSize: '2rem' }}>{selectedClass.courseCode}</h1>
+                                        <div style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>{selectedClass.courseName}</div>
                                     </div>
-                                    <button className="btn btn-icon btn-ghost" onClick={() => setSelectedClass(null)}>&times;</button>
+                                    <button className="btn btn-icon btn-ghost" onClick={() => setSelectedClass(null)} style={{ fontSize: '1.5rem' }}>&times;</button>
                                 </div>
-
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                        <Clock size={16} color="var(--text-muted)" />
-                                        <span>{selectedClass.day}, {selectedClass.timeStart} - {selectedClass.timeEnd}</span>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 20, background: 'var(--bg-secondary)', padding: 20, borderRadius: 12, border: '1px solid var(--border)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
+                                            <Clock size={20} />
+                                        </div>
+                                        <div>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Date & Time</div>
+                                            <div style={{ fontWeight: 600 }}>{selectedClass.day}, {selectedClass.timeStart} - {selectedClass.timeEnd}</div>
+                                        </div>
                                     </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                        <CalendarIcon size={16} color="var(--text-muted)" />
-                                        <span>Room: {selectedClass.location || 'N/A'}</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
+                                            <FileText size={20} />
+                                        </div>
+                                        <div>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Location / Room</div>
+                                            <div style={{ fontWeight: 600 }}>{selectedClass.location || 'Not Specified'}</div>
+                                        </div>
                                     </div>
                                     {selectedClass.instructor && (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                            <User size={16} color="var(--text-muted)" />
-                                            <span>Instructor: {selectedClass.instructor}</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                            <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
+                                                <User size={20} />
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Instructor</div>
+                                                <div style={{ fontWeight: 600 }}>{selectedClass.instructor}</div>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
-
-                                <div style={{ marginTop: 24, display: 'flex', gap: 12 }}>
+                                <div style={{ marginTop: 32, display: 'flex', gap: 12 }}>
+                                    <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { setStep(2); setSelectedClass(null); }}>
+                                        <Edit2 size={16} /> Edit Data
+                                    </button>
                                     <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => setSelectedClass(null)}>Close</button>
                                 </div>
                             </div>
@@ -533,3 +565,5 @@ export default function TimetableGenerator() {
         </div>
     );
 }
+
+export default TimetableGenerator;
