@@ -65,6 +65,25 @@ export default function DailyPlanner() {
         const newTasks = tasks.map(task => task.id === id ? { ...task, completed: !completed } : task);
         setTasks(newTasks);
         saveTasksToLocal(newTasks);
+
+        // Sync to unified Calendar if newly completed
+        if (!completed) {
+            const task = tasks.find(t => t.id === id);
+            if (task) {
+                const events = JSON.parse(localStorage.getItem('jess_events') || '[]');
+                events.push({
+                    id: Math.random().toString(36).substr(2, 9),
+                    user_id: user?.id || 'guest',
+                    type: 'completed',
+                    date: date, // Same as daily planner date
+                    title: task.title,
+                    category: 'study', // Default fallback
+                    description: 'Marked as completed from Daily Planner.',
+                    created_at: new Date().toISOString()
+                });
+                localStorage.setItem('jess_events', JSON.stringify(events));
+            }
+        }
     };
 
     const deleteTask = async (id) => {

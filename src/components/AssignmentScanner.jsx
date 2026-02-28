@@ -6,6 +6,7 @@ import { Copy, Check, BookOpen, ScanText, UploadCloud, FileText, History, Trash2
 import LoadingSpinner from './LoadingSpinner';
 import * as pdfjsLib from 'pdfjs-dist';
 import * as mammoth from 'mammoth/mammoth.browser';
+import { generateWordTemplate } from '../utils/docxGenerator';
 
 // Set up PDF.js worker via CDN to avoid Vite/Vercel build issues
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
@@ -24,6 +25,7 @@ export default function AssignmentScanner() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [copied, setCopied] = useState(false);
+    const [templateLoading, setTemplateLoading] = useState(false);
 
     // History State
     const [activeTab, setActiveTab] = useState('scanner');
@@ -169,6 +171,26 @@ Provide your analysis in this EXACT format:
             savedData.push(newAssign);
             localStorage.setItem('jess_assignments', JSON.stringify(savedData));
             loadHistory();
+
+            // Sync to Future Planner Calendar!
+            const events = JSON.parse(localStorage.getItem('jess_events') || '[]');
+            // Try to find a due date using raw text (heuristically +7 days for now if no hard prompt)
+            const futureDate = new Date();
+            futureDate.setDate(futureDate.getDate() + 7); // Default future date
+
+            events.push({
+                id: Math.random().toString(36).substr(2, 9),
+                user_id: user?.id || 'guest',
+                type: 'assignment',
+                date: futureDate.toISOString().split('T')[0],
+                title: `Due: ${form.title || form.subject}`,
+                category: 'study',
+                description: form.rawText.substring(0, 150) + '...',
+                created_at: new Date().toISOString(),
+                reminder: true
+            });
+            localStorage.setItem('jess_events', JSON.stringify(events));
+
         } catch (err) {
             setError(err.message);
         } finally {
@@ -180,6 +202,22 @@ Provide your analysis in this EXACT format:
         navigator.clipboard.writeText(analysis);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+    };
+
+    const handleDownloadTemplate = async (itemData) => {
+        try {
+            setTemplateLoading(true);
+            await generateWordTemplate({
+                title: itemData.title || form.title,
+                subject: itemData.subject || form.subject,
+                rawText: itemData.rawText || form.rawText
+            }, user?.email);
+        } catch (error) {
+            console.error("Failed to generate docx:", error);
+            setError("Failed to generate Word template.");
+        } finally {
+            setTemplateLoading(false);
+        }
     };
 
     return (
@@ -286,6 +324,9 @@ Provide your analysis in this EXACT format:
                                 <button className="btn btn-sm btn-secondary" onClick={copyToClipboard}>
                                     {copied ? <><Check size={14} /> Copied!</> : <><Copy size={14} /> Copy</>}
                                 </button>
+                                <button className="btn btn-sm btn-primary" onClick={() => handleDownloadTemplate(form)} disabled={templateLoading}>
+                                    <FileText size={14} /> {templateLoading ? 'Generating...' : 'Download docx Template'}
+                                </button>
                             </div>
                             <div className="output-box" style={{ whiteSpace: 'pre-wrap' }}>{analysis}</div>
                         </div>
@@ -337,6 +378,9 @@ Provide your analysis in this EXACT format:
                                     <div style={{ display: 'flex', gap: 8 }}>
                                         <button className="btn btn-sm btn-primary" onClick={() => handleViewPast(item)}>
                                             <Eye size={14} /> View Analysis
+                                        </button>
+                                        <button className="btn btn-sm btn-secondary" onClick={() => handleDownloadTemplate(item)}>
+                                            <FileText size={14} /> Template
                                         </button>
                                         <button className="btn btn-sm btn-secondary" onClick={() => handleDelete(item.id)} style={{ color: 'var(--danger)', marginLeft: 'auto' }}>
                                             <Trash2 size={14} />

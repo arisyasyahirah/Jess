@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, Mail, BookOpen, CalendarDays,
-    Settings, LogOut, Sparkles
+    Settings, LogOut, Sparkles, CalendarRange
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
@@ -10,6 +10,7 @@ const navItems = [
     { to: '/email', icon: Mail, label: 'Email Drafting' },
     { to: '/assignments', icon: BookOpen, label: 'Assignments' },
     { to: '/planner', icon: CalendarDays, label: 'Daily Planner' },
+    { to: '/future-planner', icon: CalendarRange, label: 'Future Plans', highlight: true },
     { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
@@ -42,11 +43,12 @@ export default function Sidebar() {
 
             {/* Nav links */}
             <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {navItems.map(({ to, icon: Icon, label }) => (
+                {navItems.map(({ to, icon: Icon, label, highlight }) => (
                     <NavLink
                         key={to}
                         to={to}
                         className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+                        style={highlight ? { color: 'var(--accent)', fontWeight: 600 } : {}}
                     >
                         <Icon size={18} />
                         <span>{label}</span>
@@ -90,9 +92,9 @@ export function MobileNav() {
 
     const mobileItems = [
         { to: '/dashboard', icon: LayoutDashboard, label: 'Home' },
-        { to: '/email', icon: Mail, label: 'Email' },
         { to: '/assignments', icon: BookOpen, label: 'Assign' },
-        { to: '/planner', icon: CalendarDays, label: 'Planner' },
+        { to: '/planner', icon: CalendarDays, label: 'Daily' },
+        { to: '/future-planner', icon: CalendarRange, label: 'Future' },
         { to: '/settings', icon: Settings, label: 'Settings' },
     ];
 

@@ -97,58 +97,6 @@ export default function SettingsPage() {
                     </div>
                 </div>
 
-                {/* API Keys Settings */}
-                <div className="card fade-in" style={{ marginBottom: 24, padding: 24 }}>
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
-                        <div style={{
-                            width: 40, height: 40, borderRadius: 10,
-                            background: `var(--accent, #a855f7)20`,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            flexShrink: 0,
-                        }}>
-                            <Key size={18} color="var(--accent)" />
-                        </div>
-                        <div>
-                            <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>AI Configuration</h2>
-                            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>Connect your personal AI models.</p>
-                        </div>
-                    </div>
-
-                    <div className="alert alert-info" style={{ marginBottom: 16, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                        <Shield size={18} style={{ flexShrink: 0, marginTop: 2 }} />
-                        <div>
-                            <strong>Keys are stored locally.</strong> Your API keys never leave this browser and are only used to communicate directly with the AI providers.
-                        </div>
-                    </div>
-
-                    <div className="form-group" style={{ marginBottom: 16 }}>
-                        <label>Groq API Key (Recommended)</label>
-                        <input
-                            type="password"
-                            className="form-input"
-                            placeholder="gsk_..."
-                            value={groqKey}
-                            onChange={(e) => setGroqKey(e.target.value)}
-                        />
-                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>Used for lightning fast responses.</p>
-                    </div>
-
-                    <div className="form-group" style={{ marginBottom: 16 }}>
-                        <label>Google Gemini API Key (Alternative)</label>
-                        <input
-                            type="password"
-                            className="form-input"
-                            placeholder="AIzaSy..."
-                            value={geminiKey}
-                            onChange={(e) => setGeminiKey(e.target.value)}
-                        />
-                    </div>
-
-                    <button className="btn btn-primary" onClick={saveKeys}>
-                        {saved ? <><Check size={16} /> Saved Successfully</> : 'Save API Keys'}
-                    </button>
-                </div>
-
 
             </main>
             <MobileNav />

@@ -5,6 +5,7 @@ import DashboardPage from './pages/DashboardPage';
 import EmailPage from './pages/EmailPage';
 import AssignmentsPage from './pages/AssignmentsPage';
 import PlannerPage from './pages/PlannerPage';
+import FuturePlannerPage from './pages/FuturePlannerPage';
 import SettingsPage from './pages/SettingsPage';
 import LoadingSpinner from './components/LoadingSpinner';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -28,6 +29,7 @@ export default function App() {
                     <Route path="/email" element={<ProtectedRoute><EmailPage /></ProtectedRoute>} />
                     <Route path="/assignments" element={<ProtectedRoute><AssignmentsPage /></ProtectedRoute>} />
                     <Route path="/planner" element={<ProtectedRoute><PlannerPage /></ProtectedRoute>} />
+                    <Route path="/future-planner" element={<ProtectedRoute><FuturePlannerPage /></ProtectedRoute>} />
                     <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
