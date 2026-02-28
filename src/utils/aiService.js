@@ -1,4 +1,4 @@
-import { getApiKey, getActiveProvider } from './storage';
+// Storage no longer needed for API keys
 
 async function callGemini(prompt, apiKey) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
@@ -41,12 +41,15 @@ async function callGroq(prompt, apiKey) {
 }
 
 export async function callAI(prompt) {
-    const provider = getActiveProvider();
-    if (!provider) {
-        throw new Error('No API key found. Please add your Gemini or Groq API key in Settings.');
+    const groqKey = import.meta.env.VITE_GROQ_API_KEY;
+    const geminiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+    if (groqKey) {
+        return callGroq(prompt, groqKey);
+    } else if (geminiKey) {
+        return callGemini(prompt, geminiKey);
     }
-    const key = getApiKey(provider);
-    if (provider === 'gemini') return callGemini(prompt, key);
-    if (provider === 'groq') return callGroq(prompt, key);
-    throw new Error('Unknown provider');
+
+    // Mock response when no API keys are provided for general website testing
+    return `[Mock AI Response]\n\nSince no API keys are configured in the .env file, this is a mock generated response. \n\nHere is what I would have generated based on your prompt: \n"${prompt.substring(0, 50)}..."\n\nYou can safely test the UI functionalities!`;
 }

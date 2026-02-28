@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
 import { Mail, Lock, Sparkles, Eye, EyeOff } from 'lucide-react';
 import LoadingSpinner from '../components/LoadingSpinner';
 
@@ -11,6 +11,7 @@ export default function AuthPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const navigate = useNavigate();
+    const { signInMock } = useAuth();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -18,7 +19,8 @@ export default function AuthPage() {
         setLoading(true);
 
         try {
-            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            // Local mock sign-in bypass for general testing
+            const { error } = await signInMock(email);
             if (error) throw error;
             navigate('/dashboard');
         } catch (err) {

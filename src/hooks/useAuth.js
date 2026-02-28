@@ -1,18 +1,35 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
-
-const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL;
 
 export function useAuth() {
-    // Mock user to bypass auth temporarily
-    const [user] = useState({ id: 'mock-local-user', email: ADMIN_EMAIL || 'local.dev@jess.app' });
-    const [loading] = useState(false);
+    // Basic mock session allowing general website testing
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
 
-    const signOut = async () => {
-        console.log("Mock sign out - auth is bypassed");
+    useEffect(() => {
+        const storedUser = localStorage.getItem('jess_mock_user');
+        if (storedUser) {
+            try {
+                setUser(JSON.parse(storedUser));
+            } catch (e) {
+                // Ignore parse errors from stale data
+            }
+        }
+        setLoading(false);
+    }, []);
+
+    const signInMock = async (email) => {
+        const mockUser = { id: 'mock-local-user', email };
+        localStorage.setItem('jess_mock_user', JSON.stringify(mockUser));
+        setUser(mockUser);
+        return { error: null };
     };
 
-    const isAdmin = true; // Always admin in local bypass mode
+    const signOut = async () => {
+        localStorage.removeItem('jess_mock_user');
+        window.location.href = '/auth';
+    };
 
-    return { user, loading, signOut, isAdmin };
+    const isAdmin = false; // Regular testing usage
+
+    return { user, loading, signOut, isAdmin, signInMock };
 }

@@ -16,47 +16,57 @@ export default function DailyPlanner() {
     const [error, setError] = useState('');
     const [copied, setCopied] = useState(false);
 
-    // Load tasks from Supabase
+    // Load tasks from LocalStorage for testing
     useEffect(() => {
         if (!user) return;
         const fetchTasks = async () => {
             setLoadingTasks(true);
-            const { data } = await supabase
-                .from('jess_planner_tasks')
-                .select('*')
-                .eq('user_id', user.id)
-                .eq('task_date', date)
-                .order('priority');
-            setTasks(data || []);
+            const saved = localStorage.getItem('jess_tasks');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    const todaysTasks = parsed.filter(t => t.user_id === user.id && t.task_date === date);
+                    setTasks(todaysTasks.sort((a, b) => a.priority - b.priority));
+                } catch (e) { }
+            }
             setLoadingTasks(false);
         };
         fetchTasks();
     }, [user, date]);
 
+    const saveTasksToLocal = (newTasks) => {
+        const saved = JSON.parse(localStorage.getItem('jess_tasks') || '[]');
+        // remove old tasks for this date & user
+        const otherTasks = saved.filter(t => !(t.user_id === user.id && t.task_date === date));
+        localStorage.setItem('jess_tasks', JSON.stringify([...otherTasks, ...newTasks]));
+    };
+
     const addTask = async () => {
         if (!newTask.trim()) return;
         const task = {
+            id: Math.random().toString(36).substr(2, 9),
             user_id: user.id,
             task_date: date,
             title: newTask.trim(),
             completed: false,
             priority: tasks.length,
         };
-        const { data, error } = await supabase.from('jess_planner_tasks').insert(task).select().single();
-        if (!error && data) {
-            setTasks(t => [...t, data]);
-            setNewTask('');
-        }
+        const newTasks = [...tasks, task];
+        setTasks(newTasks);
+        saveTasksToLocal(newTasks);
+        setNewTask('');
     };
 
     const toggleTask = async (id, completed) => {
-        await supabase.from('jess_planner_tasks').update({ completed: !completed }).eq('id', id);
-        setTasks(t => t.map(task => task.id === id ? { ...task, completed: !completed } : task));
+        const newTasks = tasks.map(task => task.id === id ? { ...task, completed: !completed } : task);
+        setTasks(newTasks);
+        saveTasksToLocal(newTasks);
     };
 
     const deleteTask = async (id) => {
-        await supabase.from('jess_planner_tasks').delete().eq('id', id);
-        setTasks(t => t.filter(task => task.id !== id));
+        const newTasks = tasks.filter(task => task.id !== id);
+        setTasks(newTasks);
+        saveTasksToLocal(newTasks);
     };
 
     const generateSchedule = async () => {

@@ -1,131 +1,6 @@
-import { useState } from 'react';
 import Sidebar, { MobileNav } from '../components/Sidebar';
 import { useAuth } from '../hooks/useAuth';
-import { saveApiKey, getApiKey, clearApiKey } from '../utils/storage';
-import { Key, Trash2, Check, AlertCircle, Shield, Eye, EyeOff } from 'lucide-react';
-
-const PROVIDERS = [
-    {
-        id: 'gemini',
-        name: 'Google Gemini',
-        label: 'Gemini API Key',
-        placeholder: 'AIza...',
-        docsUrl: 'https://aistudio.google.com/app/apikey',
-        hint: 'Free tier available — 1,500 requests/day.',
-        color: '#4285f4',
-    },
-    {
-        id: 'groq',
-        name: 'Groq',
-        label: 'Groq API Key',
-        placeholder: 'gsk_...',
-        docsUrl: 'https://console.groq.com/keys',
-        hint: 'Extremely fast inference. Free tier: 14,400 requests/day.',
-        color: '#f55036',
-    },
-];
-
-function ProviderCard({ provider }) {
-    const [value, setValue] = useState(getApiKey(provider.id));
-    const [saved, setSaved] = useState(!!getApiKey(provider.id));
-    const [show, setShow] = useState(false);
-    const [flash, setFlash] = useState(null); // 'saved' | 'cleared'
-
-    const handleSave = () => {
-        if (!value.trim()) return;
-        saveApiKey(provider.id, value.trim());
-        setSaved(true);
-        setFlash('saved');
-        setTimeout(() => setFlash(null), 2000);
-    };
-
-    const handleClear = () => {
-        clearApiKey(provider.id);
-        setValue('');
-        setSaved(false);
-        setFlash('cleared');
-        setTimeout(() => setFlash(null), 2000);
-    };
-
-    return (
-        <div className="card" style={{ marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                <div style={{
-                    width: 40, height: 40, borderRadius: 10,
-                    background: `${provider.color}20`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0,
-                }}>
-                    <Key size={18} color={provider.color} />
-                </div>
-                <div>
-                    <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{provider.name}</div>
-                    <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{provider.hint}</div>
-                </div>
-                {saved && (
-                    <span className="badge badge-success" style={{ marginLeft: 'auto', flexShrink: 0 }}>
-                        <Check size={12} style={{ marginRight: 4 }} /> Active
-                    </span>
-                )}
-            </div>
-
-            <div className="form-group" style={{ marginBottom: 12 }}>
-                <label htmlFor={`key-${provider.id}`}>{provider.label}</label>
-                <div style={{ position: 'relative' }}>
-                    <input
-                        id={`key-${provider.id}`}
-                        type={show ? 'text' : 'password'}
-                        value={value}
-                        onChange={e => setValue(e.target.value)}
-                        placeholder={provider.placeholder}
-                        style={{ paddingRight: 44 }}
-                        onKeyDown={e => e.key === 'Enter' && handleSave()}
-                    />
-                    <button
-                        type="button"
-                        className="btn btn-icon btn-ghost"
-                        onClick={() => setShow(s => !s)}
-                        style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', padding: 6 }}
-                        title={show ? 'Hide key' : 'Show key'}
-                    >
-                        {show ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={!value.trim()}>
-                    <Check size={14} /> Save Key
-                </button>
-                {saved && (
-                    <button className="btn btn-danger btn-sm" onClick={handleClear}>
-                        <Trash2 size={14} /> Clear
-                    </button>
-                )}
-                <a
-                    href={provider.docsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-ghost btn-sm"
-                    style={{ marginLeft: 'auto' }}
-                >
-                    Get API Key →
-                </a>
-            </div>
-
-            {flash === 'saved' && (
-                <div className="alert alert-success" style={{ marginTop: 12 }}>
-                    ✅ API key saved to browser storage.
-                </div>
-            )}
-            {flash === 'cleared' && (
-                <div className="alert alert-warning" style={{ marginTop: 12 }}>
-                    🗑️ API key cleared.
-                </div>
-            )}
-        </div>
-    );
-}
+import { Settings as SettingsIcon, Shield } from 'lucide-react';
 
 export default function SettingsPage() {
     const { user, signOut } = useAuth();
@@ -136,35 +11,40 @@ export default function SettingsPage() {
             <main className="main-content">
                 <div className="page-header fade-in">
                     <h1>Settings</h1>
-                    <p>Manage your API keys and account preferences.</p>
+                    <p>Manage your account preferences.</p>
                 </div>
 
-                {/* Privacy notice */}
-                <div className="alert alert-info fade-in" style={{ marginBottom: 24, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                    <Shield size={18} style={{ flexShrink: 0, marginTop: 2 }} />
-                    <div>
-                        <strong>Your keys never leave your browser.</strong> API keys are stored only in your browser's localStorage and are sent directly to the AI provider — Jess never sees them.
+                {/* General Settings */}
+                <div className="card fade-in" style={{ marginBottom: 24, padding: 24 }}>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
+                        <div style={{
+                            width: 40, height: 40, borderRadius: 10,
+                            background: `var(--base-color, #4285f4)20`,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            flexShrink: 0,
+                        }}>
+                            <SettingsIcon size={18} color="var(--text-primary)" />
+                        </div>
+                        <div>
+                            <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>General Settings</h2>
+                            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>Basic application preferences.</p>
+                        </div>
+                    </div>
+
+                    <div className="form-group">
+                        <label>Application Theme</label>
+                        <select className="form-select" style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }} disabled>
+                            <option>Dark Mode (Default)</option>
+                        </select>
+                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '8px' }}>Theme customization coming soon.</p>
                     </div>
                 </div>
 
-                {/* Provider cards */}
-                <div className="fade-in">
-                    <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 16 }}>AI Provider Keys</h2>
-                    {PROVIDERS.map(p => <ProviderCard key={p.id} provider={p} />)}
-                </div>
-
-                {/* How to use note */}
-                <div className="card fade-in" style={{ marginTop: 8 }}>
-                    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                        <AlertCircle size={18} color="var(--warning)" style={{ flexShrink: 0, marginTop: 2 }} />
-                        <div>
-                            <div style={{ fontWeight: 600, marginBottom: 4 }}>Which provider to use?</div>
-                            <ul style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.8, paddingLeft: 16 }}>
-                                <li><strong>Gemini</strong> — Best for detailed, nuanced outputs. Get a key free at Google AI Studio.</li>
-                                <li><strong>Groq</strong> — Blazing fast responses. Great for quick tasks and planning. Free tier is generous.</li>
-                                <li>Jess will use whichever key is saved. Gemini takes priority if both are present.</li>
-                            </ul>
-                        </div>
+                {/* API Info notice */}
+                <div className="alert alert-info fade-in" style={{ marginBottom: 24, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                    <Shield size={18} style={{ flexShrink: 0, marginTop: 2 }} />
+                    <div>
+                        <strong>API Keys are managed securely.</strong> Your AI service keys are now securely configured via the application's environment configuration file (`.env`), ensuring they are not exposed in the browser.
                     </div>
                 </div>
 

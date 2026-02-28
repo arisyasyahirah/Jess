@@ -41,16 +41,20 @@ Requirements:
             const text = await callAI(prompt);
             setDraft(text);
 
-            // Save to Supabase
+            // Save to LocalStorage
             if (user) {
-                await supabase.from('jess_emails').insert({
+                const saved = JSON.parse(localStorage.getItem('jess_emails') || '[]');
+                saved.push({
+                    id: Math.random().toString(36).substr(2, 9),
                     user_id: user.id,
                     subject: form.subject,
                     recipient: form.recipient,
                     tone: form.tone,
                     key_points: form.keyPoints,
                     draft_text: text,
+                    created_at: new Date().toISOString()
                 });
+                localStorage.setItem('jess_emails', JSON.stringify(saved));
                 setSaved(true);
             }
         } catch (err) {

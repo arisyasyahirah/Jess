@@ -64,14 +64,18 @@ Provide your analysis in this EXACT format:
             setAnalysis(text);
 
             if (user) {
-                await supabase.from('jess_assignments').insert({
+                const saved = JSON.parse(localStorage.getItem('jess_assignments') || '[]');
+                saved.push({
+                    id: Math.random().toString(36).substr(2, 9),
                     user_id: user.id,
                     title: form.title,
                     subject: form.subject,
                     urgency: form.urgency,
                     raw_text: form.rawText,
                     analysis: text,
+                    created_at: new Date().toISOString()
                 });
+                localStorage.setItem('jess_assignments', JSON.stringify(saved));
             }
         } catch (err) {
             setError(err.message);

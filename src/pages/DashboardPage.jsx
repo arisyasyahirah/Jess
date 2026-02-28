@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { Mail, BookOpen, CalendarCheck, Zap, ArrowRight, Sparkles } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
-import { getActiveProvider } from '../utils/storage';
+// Storage import removed
 
 function greeting() {
     const h = new Date().getHours();
@@ -17,17 +17,16 @@ export default function DashboardPage() {
     const { user } = useAuth();
     const [stats, setStats] = useState({ emails: 0, assignments: 0, tasks: 0 });
     const [loadingStats, setLoadingStats] = useState(true);
-    const hasKey = !!getActiveProvider();
+    // API key is now managed via environment variables
 
     useEffect(() => {
         if (!user) return;
         const fetchStats = async () => {
-            const [{ count: emails }, { count: assignments }, { count: tasks }] = await Promise.all([
-                supabase.from('jess_emails').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-                supabase.from('jess_assignments').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-                supabase.from('jess_planner_tasks').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('completed', true),
-            ]);
-            setStats({ emails: emails || 0, assignments: assignments || 0, tasks: tasks || 0 });
+            const emails = JSON.parse(localStorage.getItem('jess_emails') || '[]').filter(e => e.user_id === user.id).length;
+            const assignments = JSON.parse(localStorage.getItem('jess_assignments') || '[]').filter(e => e.user_id === user.id).length;
+            const tasks = JSON.parse(localStorage.getItem('jess_tasks') || '[]').filter(e => e.user_id === user.id && e.completed).length;
+
+            setStats({ emails, assignments, tasks });
             setLoadingStats(false);
         };
         fetchStats();
@@ -54,13 +53,7 @@ export default function DashboardPage() {
                     <p>Here's your productivity overview for today.</p>
                 </div>
 
-                {/* API key warning */}
-                {!hasKey && (
-                    <div className="alert alert-warning fade-in" style={{ marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-                        <span>⚠️ No AI API key set. Features won't work until you add one.</span>
-                        <NavLink to="/settings" className="btn btn-sm btn-secondary">Add API Key →</NavLink>
-                    </div>
-                )}
+                {/* API key is now configured via environment variables */}
 
                 {/* Stats */}
                 <div className="grid-3 fade-in" style={{ marginBottom: 32 }}>
