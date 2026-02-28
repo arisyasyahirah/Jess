@@ -2,14 +2,18 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { callAI } from '../utils/aiService';
 import { useAuth } from '../hooks/useAuth';
-import { Plus, Trash2, Check, CalendarDays, Wand2, Copy } from 'lucide-react';
+import { Plus, Trash2, Check, CalendarDays, Wand2, Copy, ChevronLeft, ChevronRight } from 'lucide-react';
 import LoadingSpinner from './LoadingSpinner';
 
 export default function DailyPlanner() {
     const { user } = useAuth();
     const [tasks, setTasks] = useState([]);
     const [newTask, setNewTask] = useState('');
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [date, setDate] = useState(() => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    });
+    const [weekOffset, setWeekOffset] = useState(0);
     const [schedule, setSchedule] = useState('');
     const [loading, setLoading] = useState(false);
     const [loadingTasks, setLoadingTasks] = useState(true);
@@ -116,19 +120,81 @@ Format your response as:
 
     const completedCount = tasks.filter(t => t.completed).length;
 
+    const currentDate = new Date();
+    const currentDayOfWeek = currentDate.getDay() === 0 ? 6 : currentDate.getDay() - 1; // 0=Mon, 6=Sun
+    const startOfCurrentWeek = new Date(currentDate);
+    startOfCurrentWeek.setDate(currentDate.getDate() - currentDayOfWeek);
+    startOfCurrentWeek.setHours(0, 0, 0, 0);
+
+    const startOfWeek = new Date(startOfCurrentWeek);
+    startOfWeek.setDate(startOfWeek.getDate() + (weekOffset * 7));
+
+    const weekDays = Array.from({ length: 7 }).map((_, i) => {
+        const d = new Date(startOfWeek);
+        d.setDate(d.getDate() + i);
+        return d;
+    });
+
+    const isToday = (d) => {
+        const today = new Date();
+        return d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+    };
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            {/* Date + progress */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-                <div className="form-group" style={{ flex: '0 0 auto' }}>
-                    <label htmlFor="plan-date">Date</label>
-                    <input id="plan-date" type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: 'auto' }} />
+            {/* Custom Calendar Strip */}
+            <div className="card fade-in" style={{ padding: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                    <h3 style={{ margin: 0, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <CalendarDays size={18} color="var(--accent)" />
+                        {startOfWeek.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    </h3>
+                    {tasks.length > 0 && (
+                        <span className="badge badge-accent fade-in">{completedCount}/{tasks.length} tasks done</span>
+                    )}
                 </div>
-                {tasks.length > 0 && (
-                    <div style={{ marginTop: 20 }}>
-                        <span className="badge badge-accent">{completedCount}/{tasks.length} done</span>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <button className="btn btn-icon btn-secondary" onClick={() => setWeekOffset(o => o - 1)} style={{ flexShrink: 0 }}>
+                        <ChevronLeft size={18} />
+                    </button>
+
+                    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '4px', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
+                        {weekDays.map(d => {
+                            const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                            const isSelected = date === dStr;
+                            const isCurrDay = isToday(d);
+
+                            return (
+                                <button
+                                    key={dStr}
+                                    onClick={() => setDate(dStr)}
+                                    style={{
+                                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                                        minWidth: 50, height: 64, borderRadius: 12, border: 'none', cursor: 'pointer', transition: 'all 0.2s',
+                                        background: isSelected ? 'var(--primary)' : (isCurrDay ? 'var(--bg-secondary)' : 'transparent'),
+                                        color: isSelected ? '#fff' : 'var(--text-primary)',
+                                        position: 'relative', outline: isCurrDay && !isSelected ? '1px solid var(--border)' : 'none'
+                                    }}
+                                >
+                                    <span style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', opacity: isSelected ? 0.9 : 0.6 }}>
+                                        {d.toLocaleDateString('en-US', { weekday: 'short' })}
+                                    </span>
+                                    <span style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: 2 }}>
+                                        {d.getDate()}
+                                    </span>
+                                    {isCurrDay && (
+                                        <div style={{ position: 'absolute', bottom: 6, width: 4, height: 4, borderRadius: '50%', background: isSelected ? '#fff' : 'var(--accent)' }} />
+                                    )}
+                                </button>
+                            )
+                        })}
                     </div>
-                )}
+
+                    <button className="btn btn-icon btn-secondary" onClick={() => setWeekOffset(o => o + 1)} style={{ flexShrink: 0 }}>
+                        <ChevronRight size={18} />
+                    </button>
+                </div>
             </div>
 
             {/* Add task */}

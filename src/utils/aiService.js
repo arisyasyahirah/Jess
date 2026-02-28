@@ -41,8 +41,11 @@ async function callGroq(prompt, apiKey) {
 }
 
 export async function callAI(prompt) {
-    const groqKey = import.meta.env.VITE_GROQ_API_KEY;
-    const geminiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    const localGroq = localStorage.getItem('jess_api_key_groq');
+    const localGemini = localStorage.getItem('jess_api_key_gemini');
+
+    const groqKey = localGroq || import.meta.env.VITE_GROQ_API_KEY;
+    const geminiKey = localGemini || import.meta.env.VITE_GEMINI_API_KEY;
 
     if (groqKey) {
         return callGroq(prompt, groqKey);

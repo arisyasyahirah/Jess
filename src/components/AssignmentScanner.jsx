@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { callAI } from '../utils/aiService';
 import { useAuth } from '../hooks/useAuth';
-import { Copy, Check, BookOpen, ScanText, UploadCloud, FileText } from 'lucide-react';
+import { Copy, Check, BookOpen, ScanText, UploadCloud, FileText, History, Trash2, Search, Eye } from 'lucide-react';
 import LoadingSpinner from './LoadingSpinner';
 import * as pdfjsLib from 'pdfjs-dist';
 import * as mammoth from 'mammoth/mammoth.browser';
@@ -19,11 +19,50 @@ const URGENCIES = [
 
 export default function AssignmentScanner() {
     const { user } = useAuth();
-    const [form, setForm] = useState({ title: '', subject: 'Computer Science', urgency: 'medium', rawText: '' });
+    const [form, setForm] = useState({ title: '', subject: 'Computer Science', urgency: 'medium', rawText: '', fileName: '' });
     const [analysis, setAnalysis] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [copied, setCopied] = useState(false);
+
+    // History State
+    const [activeTab, setActiveTab] = useState('scanner');
+    const [history, setHistory] = useState([]);
+    const [searchQuery, setSearchQuery] = useState('');
+
+    useEffect(() => {
+        loadHistory();
+    }, []);
+
+    const loadHistory = () => {
+        const savedData = JSON.parse(localStorage.getItem('jess_assignments') || '[]');
+        savedData.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        setHistory(savedData);
+    };
+
+    const handleDelete = (id) => {
+        const savedData = JSON.parse(localStorage.getItem('jess_assignments') || '[]');
+        const updated = savedData.filter(item => item.id !== id);
+        localStorage.setItem('jess_assignments', JSON.stringify(updated));
+        loadHistory();
+    };
+
+    const handleViewPast = (item) => {
+        setForm({
+            title: item.title || '',
+            subject: item.subject || 'Computer Science',
+            urgency: item.urgency || 'medium',
+            rawText: item.raw_text || '',
+            fileName: item.file_name || ''
+        });
+        setAnalysis(item.analysis || '');
+        setActiveTab('scanner');
+    };
+
+    const filteredHistory = history.filter(item =>
+        (item.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (item.file_name || '').toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
     const handleFileUpload = async (e) => {
         const file = e.target.files?.[0];
@@ -58,7 +97,8 @@ export default function AssignmentScanner() {
             setForm(f => ({
                 ...f,
                 rawText: extractedText.trim(),
-                title: f.title || file.name.replace(/\.[^/.]+$/, "")
+                title: f.title || file.name.replace(/\.[^/.]+$/, ""),
+                fileName: file.name
             }));
 
         } catch (err) {
@@ -112,20 +152,23 @@ Provide your analysis in this EXACT format:
             const text = await callAI(prompt);
             setAnalysis(text);
 
-            if (user) {
-                const saved = JSON.parse(localStorage.getItem('jess_assignments') || '[]');
-                saved.push({
-                    id: Math.random().toString(36).substr(2, 9),
-                    user_id: user.id,
-                    title: form.title,
-                    subject: form.subject,
-                    urgency: form.urgency,
-                    raw_text: form.rawText,
-                    analysis: text,
-                    created_at: new Date().toISOString()
-                });
-                localStorage.setItem('jess_assignments', JSON.stringify(saved));
-            }
+            // Save to history uniformly instead of conditionally on old user check
+            const newAssign = {
+                id: Math.random().toString(36).substr(2, 9),
+                user_id: user?.id || 'guest',
+                title: form.title,
+                subject: form.subject,
+                urgency: form.urgency,
+                raw_text: form.rawText,
+                file_name: form.fileName,
+                analysis: text,
+                status: 'Scanned',
+                created_at: new Date().toISOString()
+            };
+            const savedData = JSON.parse(localStorage.getItem('jess_assignments') || '[]');
+            savedData.push(newAssign);
+            localStorage.setItem('jess_assignments', JSON.stringify(savedData));
+            loadHistory();
         } catch (err) {
             setError(err.message);
         } finally {
@@ -141,90 +184,168 @@ Provide your analysis in this EXACT format:
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            <form onSubmit={handleAnalyze} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div className="grid-2">
-                    <div className="form-group">
-                        <label htmlFor="assign-title">Assignment Title</label>
-                        <input id="assign-title" type="text" placeholder="e.g. Data Structures Lab Report" value={form.title} onChange={e => handleChange('title', e.target.value)} />
-                    </div>
-                    <div className="form-group">
-                        <label htmlFor="assign-subject">Subject</label>
-                        <select id="assign-subject" value={form.subject} onChange={e => handleChange('subject', e.target.value)}>
-                            {SUBJECTS.map(s => <option key={s}>{s}</option>)}
-                        </select>
-                    </div>
-                </div>
 
-                <div className="form-group">
-                    <label>Urgency Level</label>
-                    <div className="chip-group">
-                        {URGENCIES.map(({ value, label, color }) => (
-                            <button key={value} type="button" className={`chip${form.urgency === value ? ' active' : ''}`}
-                                onClick={() => handleChange('urgency', value)}
-                                style={form.urgency === value ? { borderColor: color, color } : {}}>
-                                {label}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="form-group">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                        <label htmlFor="assign-text" style={{ margin: 0 }}>Paste or Upload Instructions <span style={{ color: 'var(--danger)' }}>*</span></label>
-                        <div>
-                            <input
-                                type="file"
-                                id="file-upload"
-                                accept=".txt,.md,.csv,.pdf,.docx"
-                                style={{ display: 'none' }}
-                                onChange={handleFileUpload}
-                            />
-                            <label
-                                htmlFor="file-upload"
-                                className="btn btn-sm btn-secondary"
-                                style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                            >
-                                <UploadCloud size={14} /> Upload File
-                            </label>
-                        </div>
-                    </div>
-                    <textarea
-                        id="assign-text"
-                        rows={6}
-                        placeholder="Paste your full assignment question here, or upload a document (.pdf, .docx, .txt)..."
-                        value={form.rawText}
-                        onChange={e => handleChange('rawText', e.target.value)}
-                    />
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        {form.rawText.length} characters • Supported files: PDF, Word, TXT
-                    </span>
-                </div>
-
-                {error && <div className="alert alert-error">{error}</div>}
-
-                <button type="submit" className="btn btn-primary" disabled={loading} style={{ alignSelf: 'flex-start' }}>
-                    {loading ? <LoadingSpinner size="sm" /> : <><ScanText size={16} /> Analyze Assignment</>}
+            <div style={{ display: 'flex', gap: 16, borderBottom: '1px solid var(--border-color)', paddingBottom: 16 }}>
+                <button
+                    className={`btn ${activeTab === 'scanner' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setActiveTab('scanner')}
+                    style={activeTab === 'scanner' ? {} : { border: 'none', background: 'transparent' }}
+                >
+                    <ScanText size={16} /> Scanner
                 </button>
-            </form>
+                <button
+                    className={`btn ${activeTab === 'history' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setActiveTab('history')}
+                    style={activeTab === 'history' ? {} : { border: 'none', background: 'transparent' }}
+                >
+                    <History size={16} /> Assignment History
+                </button>
+            </div>
 
-            {loading && (
-                <div style={{ textAlign: 'center', padding: 32 }}>
-                    <LoadingSpinner size="lg" label="Analyzing your assignment..." />
+            {activeTab === 'scanner' && (
+                <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                    <form onSubmit={handleAnalyze} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <div className="grid-2">
+                            <div className="form-group">
+                                <label htmlFor="assign-title">Assignment Title</label>
+                                <input id="assign-title" type="text" placeholder="e.g. Data Structures Lab Report" value={form.title} onChange={e => handleChange('title', e.target.value)} />
+                            </div>
+                            <div className="form-group">
+                                <label htmlFor="assign-subject">Subject</label>
+                                <select id="assign-subject" value={form.subject} onChange={e => handleChange('subject', e.target.value)}>
+                                    {SUBJECTS.map(s => <option key={s}>{s}</option>)}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="form-group">
+                            <label>Urgency Level</label>
+                            <div className="chip-group">
+                                {URGENCIES.map(({ value, label, color }) => (
+                                    <button key={value} type="button" className={`chip${form.urgency === value ? ' active' : ''}`}
+                                        onClick={() => handleChange('urgency', value)}
+                                        style={form.urgency === value ? { borderColor: color, color } : {}}>
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="form-group">
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                <label htmlFor="assign-text" style={{ margin: 0 }}>Paste or Upload Instructions <span style={{ color: 'var(--danger)' }}>*</span></label>
+                                <div>
+                                    <input
+                                        type="file"
+                                        id="file-upload"
+                                        accept=".txt,.md,.csv,.pdf,.docx"
+                                        style={{ display: 'none' }}
+                                        onChange={handleFileUpload}
+                                    />
+                                    <label
+                                        htmlFor="file-upload"
+                                        className="btn btn-sm btn-secondary"
+                                        style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                    >
+                                        <UploadCloud size={14} /> Upload File
+                                    </label>
+                                </div>
+                            </div>
+                            <textarea
+                                id="assign-text"
+                                rows={6}
+                                placeholder="Paste your full assignment question here, or upload a document (.pdf, .docx, .txt)..."
+                                value={form.rawText}
+                                onChange={e => handleChange('rawText', e.target.value)}
+                            />
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                {form.rawText.length} characters • Supported files: PDF, Word, TXT
+                            </span>
+                        </div>
+
+                        {error && <div className="alert alert-error">{error}</div>}
+
+                        <button type="submit" className="btn btn-primary" disabled={loading} style={{ alignSelf: 'flex-start' }}>
+                            {loading ? <LoadingSpinner size="sm" /> : <><ScanText size={16} /> Analyze Assignment</>}
+                        </button>
+                    </form>
+
+                    {loading && (
+                        <div style={{ textAlign: 'center', padding: 32 }}>
+                            <LoadingSpinner size="lg" label="Analyzing your assignment..." />
+                        </div>
+                    )}
+
+                    {analysis && (
+                        <div className="fade-in">
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                                <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <BookOpen size={18} color="var(--accent)" /> Analysis Result
+                                    <span className="badge badge-success">Saved</span>
+                                </h3>
+                                <button className="btn btn-sm btn-secondary" onClick={copyToClipboard}>
+                                    {copied ? <><Check size={14} /> Copied!</> : <><Copy size={14} /> Copy</>}
+                                </button>
+                            </div>
+                            <div className="output-box" style={{ whiteSpace: 'pre-wrap' }}>{analysis}</div>
+                        </div>
+                    )}
                 </div>
             )}
 
-            {analysis && (
+            {activeTab === 'history' && (
                 <div className="fade-in">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <BookOpen size={18} color="var(--accent)" /> Analysis Result
-                            <span className="badge badge-success">Saved</span>
-                        </h3>
-                        <button className="btn btn-sm btn-secondary" onClick={copyToClipboard}>
-                            {copied ? <><Check size={14} /> Copied!</> : <><Copy size={14} /> Copy</>}
-                        </button>
+                    <div style={{ marginBottom: 16, position: 'relative' }}>
+                        <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: 12, top: 12 }} />
+                        <input
+                            type="text"
+                            className="form-input"
+                            placeholder="Search by assignment name or file..."
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                            style={{ paddingLeft: 36, width: '100%' }}
+                        />
                     </div>
-                    <div className="output-box" style={{ whiteSpace: 'pre-wrap' }}>{analysis}</div>
+
+                    {filteredHistory.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-muted)' }}>
+                            <BookOpen size={48} opacity={0.2} style={{ marginBottom: 16 }} />
+                            <p>{searchQuery ? 'No assignments match your search.' : 'No assignments scanned yet. Try uploading one!'}</p>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            {filteredHistory.map(item => (
+                                <div key={item.id} className="card" style={{ padding: 16 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                                        <div>
+                                            <h4 style={{ margin: '0 0 4px 0', fontSize: '1rem' }}>{item.title || 'Untitled Assignment'}</h4>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                    <BookOpen size={12} /> {item.subject || 'N/A'}
+                                                </span>
+                                                {item.file_name && (
+                                                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                        <FileText size={12} /> {item.file_name}
+                                                    </span>
+                                                )}
+                                                <span>•</span>
+                                                <span>{new Date(item.created_at).toLocaleString()}</span>
+                                            </div>
+                                        </div>
+                                        <span className="badge badge-primary">{item.status || 'Scanned'}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <button className="btn btn-sm btn-primary" onClick={() => handleViewPast(item)}>
+                                            <Eye size={14} /> View Analysis
+                                        </button>
+                                        <button className="btn btn-sm btn-secondary" onClick={() => handleDelete(item.id)} style={{ color: 'var(--danger)', marginLeft: 'auto' }}>
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
         </div>
