@@ -2,8 +2,16 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { callAI } from '../utils/aiService';
 import { useAuth } from '../hooks/useAuth';
-import { Copy, Check, BookOpen, ScanText, AlertTriangle } from 'lucide-react';
+import { Copy, Check, BookOpen, ScanText, UploadCloud, FileText } from 'lucide-react';
 import LoadingSpinner from './LoadingSpinner';
+import * as pdfjsLib from 'pdfjs-dist/build/pdf';
+import * as mammoth from 'mammoth/mammoth.browser';
+
+// Set up PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.mjs',
+    import.meta.url
+).toString();
 
 const SUBJECTS = ['Mathematics', 'Computer Science', 'Business', 'Engineering', 'Science', 'Humanities', 'Law', 'Medicine', 'Other'];
 const URGENCIES = [
@@ -19,6 +27,50 @@ export default function AssignmentScanner() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [copied, setCopied] = useState(false);
+
+    const handleFileUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setLoading(true);
+        setError('');
+
+        try {
+            let extractedText = '';
+
+            if (file.type === 'application/pdf') {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    extractedText += pageText + '\n\n';
+                }
+            } else if (file.name.endsWith('.docx')) {
+                const arrayBuffer = await file.arrayBuffer();
+                const result = await mammoth.extractRawText({ arrayBuffer });
+                extractedText = result.value;
+            } else if (file.type === 'text/plain' || file.name.endsWith('.md') || file.name.endsWith('.csv')) {
+                extractedText = await file.text();
+            } else {
+                throw new Error('Unsupported file type. Please upload a PDF, DOCX, or TXT file.');
+            }
+
+            setForm(f => ({
+                ...f,
+                rawText: extractedText.trim(),
+                title: f.title || file.name.replace(/\.[^/.]+$/, "")
+            }));
+
+        } catch (err) {
+            setError('Error reading file: ' + err.message);
+        } finally {
+            setLoading(false);
+            e.target.value = ''; // Reset input
+        }
+    };
 
     const handleChange = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -120,16 +172,34 @@ Provide your analysis in this EXACT format:
                 </div>
 
                 <div className="form-group">
-                    <label htmlFor="assign-text">Paste Assignment Instructions <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <label htmlFor="assign-text" style={{ margin: 0 }}>Paste or Upload Instructions <span style={{ color: 'var(--danger)' }}>*</span></label>
+                        <div>
+                            <input
+                                type="file"
+                                id="file-upload"
+                                accept=".txt,.md,.csv,.pdf,.docx"
+                                style={{ display: 'none' }}
+                                onChange={handleFileUpload}
+                            />
+                            <label
+                                htmlFor="file-upload"
+                                className="btn btn-sm btn-secondary"
+                                style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                            >
+                                <UploadCloud size={14} /> Upload File
+                            </label>
+                        </div>
+                    </div>
                     <textarea
                         id="assign-text"
                         rows={6}
-                        placeholder="Paste your full assignment question, rubric, or instructions here..."
+                        placeholder="Paste your full assignment question here, or upload a document (.pdf, .docx, .txt)..."
                         value={form.rawText}
                         onChange={e => handleChange('rawText', e.target.value)}
                     />
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        {form.rawText.length} characters
+                        {form.rawText.length} characters • Supported files: PDF, Word, TXT
                     </span>
                 </div>
 
