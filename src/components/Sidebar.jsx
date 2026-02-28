@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, Mail, BookOpen, CalendarDays,
-    Settings, LogOut, Sparkles, CalendarRange
+    Settings, LogOut, Sparkles, CalendarRange, Grid
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
@@ -11,6 +11,7 @@ const navItems = [
     { to: '/assignments', icon: BookOpen, label: 'Assignments' },
     { to: '/planner', icon: CalendarDays, label: 'Daily Planner' },
     { to: '/future-planner', icon: CalendarRange, label: 'Future Plans', highlight: true },
+    { to: '/timetable', icon: Grid, label: 'Timetable Gen' },
     { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
@@ -94,6 +95,7 @@ export function MobileNav() {
         { to: '/dashboard', icon: LayoutDashboard, label: 'Home' },
         { to: '/assignments', icon: BookOpen, label: 'Assign' },
         { to: '/planner', icon: CalendarDays, label: 'Daily' },
+        { to: '/timetable', icon: Grid, label: 'TimeTbL' },
         { to: '/future-planner', icon: CalendarRange, label: 'Future' },
         { to: '/settings', icon: Settings, label: 'Settings' },
     ];

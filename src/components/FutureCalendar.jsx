@@ -22,6 +22,7 @@ export default function FutureCalendar() {
     const [filterType, setFilterType] = useState('all'); // all, future, assignment, completed
     const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
     const [draggedEvent, setDraggedEvent] = useState(null);
+    const [calendarView, setCalendarView] = useState('month'); // '2week', 'month'
 
     // Form State
     const [showForm, setShowForm] = useState(false);
@@ -165,14 +166,27 @@ export default function FutureCalendar() {
         return true;
     }).sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // Calendar Days Generation (showing 2 weeks)
-    const viewStartDate = new Date(selectedDate);
-    viewStartDate.setDate(viewStartDate.getDate() - viewStartDate.getDay()); // Start at Sunday
-    const calendarDays = Array.from({ length: 14 }).map((_, i) => {
-        const d = new Date(viewStartDate);
-        d.setDate(d.getDate() + i);
-        return d.toISOString().split('T')[0];
-    });
+    // Calendar Days Generation
+    let calendarDays = [];
+    if (calendarView === 'month') {
+        const [year, month] = selectedDate.split('-').map(Number);
+        const firstDayOfMonth = new Date(year, month - 1, 1);
+        const startDate = new Date(firstDayOfMonth);
+        startDate.setDate(startDate.getDate() - startDate.getDay()); // Start at Sunday
+        calendarDays = Array.from({ length: 42 }).map((_, i) => {
+            const d = new Date(startDate);
+            d.setDate(d.getDate() + i);
+            return d.toISOString().split('T')[0];
+        });
+    } else {
+        const viewStartDate = new Date(selectedDate);
+        viewStartDate.setDate(viewStartDate.getDate() - viewStartDate.getDay()); // Start at Sunday
+        calendarDays = Array.from({ length: 14 }).map((_, i) => {
+            const d = new Date(viewStartDate);
+            d.setDate(d.getDate() + i);
+            return d.toISOString().split('T')[0];
+        });
+    }
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -199,6 +213,10 @@ export default function FutureCalendar() {
                 </div>
 
                 <div style={{ display: 'flex', gap: 8 }}>
+                    <div style={{ display: 'flex', background: 'var(--bg-secondary)', padding: 4, borderRadius: 8 }}>
+                        <button className={`btn btn-sm ${calendarView === '2week' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setCalendarView('2week')}>2 Weeks</button>
+                        <button className={`btn btn-sm ${calendarView === 'month' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setCalendarView('month')}>Month</button>
+                    </div>
                     <button className="btn btn-secondary" onClick={handleExport}>
                         <Download size={16} /> Export
                     </button>
@@ -265,13 +283,14 @@ export default function FutureCalendar() {
 
             {/* Calendar Drag & Drop View */}
             <div style={{
-                display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
                 gap: 12, userSelect: 'none'
             }}>
                 {calendarDays.map((dateStr) => {
                     const d = new Date(dateStr);
                     const isToday = dateStr === new Date().toISOString().split('T')[0];
                     const isSelected = dateStr === selectedDate;
+                    const isCurrentMonth = calendarView !== 'month' || d.getMonth() + 1 === parseInt(selectedDate.split('-')[1], 10);
 
                     const dayEvents = filteredEvents.filter(ev => ev.date === dateStr);
 
@@ -284,7 +303,8 @@ export default function FutureCalendar() {
                             style={{
                                 background: isSelected ? 'var(--bg-elevated)' : 'var(--bg-secondary)',
                                 border: isSelected ? '2px solid var(--accent)' : '1px solid var(--border)',
-                                borderRadius: 12, padding: 12, minHeight: 120,
+                                borderRadius: 12, padding: 12, minHeight: calendarView === 'month' ? 140 : 120,
+                                opacity: isCurrentMonth ? 1 : 0.4,
                                 cursor: 'pointer', transition: 'all 0.2s',
                                 position: 'relative'
                             }}
@@ -305,7 +325,7 @@ export default function FutureCalendar() {
                             </div>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                {dayEvents.map(ev => {
+                                {dayEvents.slice(0, calendarView === 'month' ? 3 : 10).map(ev => {
                                     const cat = CATEGORIES.find(c => c.value === ev.category);
                                     let badgeColor = cat ? cat.color : '#888';
                                     if (ev.type === 'assignment') badgeColor = '#ef4444';
@@ -336,6 +356,11 @@ export default function FutureCalendar() {
                                         </div>
                                     )
                                 })}
+                                {calendarView === 'month' && dayEvents.length > 3 && (
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: 4 }}>
+                                        + {dayEvents.length - 3} more
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )
